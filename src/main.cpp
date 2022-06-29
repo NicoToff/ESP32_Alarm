@@ -117,11 +117,12 @@ void setup()
                   Serial.print("Received: ");
                   Serial.println(password);
                   if (password.equals(SECRET)) {
+                      Serial.println("Password is valid");
                       request->send(200, "application/json", "OK");
                   } else {
+                      Serial.println("Password is invalid");
                       request->send(200, "application/json", "WRONG");
-                  }
-              });
+                  } });
 
     server.onNotFound(notFound);
 
