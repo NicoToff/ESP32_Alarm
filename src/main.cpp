@@ -69,6 +69,7 @@ void setup()
         Serial.print("HTTP Code: ");
         Serial.println(httpReturnCode);
         HTML_index_file = httpClient.getString();
+        Serial.println(HTML_index_file);
     } while (!HTTP_CODE_OK);
     httpClient.end(); // Frees the resources
 
