@@ -78,7 +78,7 @@
         btnSubmitPw.addEventListener("click", e => {
             e.preventDefault();
             console.log(password.value);
-            const validator = new RegExp("[A-Za-z0-9]{1,20}")
+            const validator = new RegExp("^[A-Za-z0-9]{1,20}$")
             const pw = String(password?.value);
             if (validator.test(pw)) {
                 $.ajax({
