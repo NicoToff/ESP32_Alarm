@@ -67,10 +67,10 @@ void setup()
         httpClient.begin("https://raw.githubusercontent.com/NicoToff/ESP32_Alarm/main/src/index.html");
         httpReturnCode = httpClient.GET();
         Serial.print("HTTP Code: ");
-        Serial.println(httpReturnCode);
+        Serial.print(httpReturnCode);
         HTML_index_file = httpClient.getString();
-        Serial.println(HTML_index_file);
     } while (!HTTP_CODE_OK);
+    Serial.println(" = OK");
     httpClient.end(); // Frees the resources
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -108,6 +108,15 @@ void setup()
     server.on("/stop", HTTP_POST, [](AsyncWebServerRequest *request)
               { digitalWrite(buzzer, LOW);
                 request->send(200); });
+
+    server.on("/pw", HTTP_POST, [](AsyncWebServerRequest *request)
+              { 
+                  String password = request->getParam(PARAM_MESSAGE, true)->value();
+                  if (password.equals(SECRET)) {
+                      request->send(200, "application/json", "{status: PW OK}");
+                  } else {
+                      request->send(200, "application/json", "{status: PW WRONG}");
+                  } });
 
     server.onNotFound(notFound);
 
