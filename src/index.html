@@ -84,7 +84,8 @@
                 data: String(password?.value),
                 dataType: "text",
                 success: function (response) {
-                    console.log(JSON.parse(response));
+                    if (response === "OK")
+                        btnBeep.removeAttribute("disabled");
                 }
             });
         });

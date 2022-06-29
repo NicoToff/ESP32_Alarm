@@ -114,6 +114,8 @@ void setup()
               { 
                   Serial.println("Getting PW ...");
                   Serial.println(request->contentType());
+                  Serial.println(request->params());
+                  Serial.println(request->contentLength());
                   if (request->hasParam(PARAM_MESSAGE, true)) {
                         String password = request->getParam(PARAM_MESSAGE, true)->value();
                         Serial.print("Received: ");
@@ -124,7 +126,7 @@ void setup()
                             request->send(200, "application/json", "{status: PW WRONG}");
                         }
                   }
-                  request->send(200, "application/json", "{status: 'PW OK'}"); });
+                  request->send(200, "application/json", "OK"); });
 
     server.onNotFound(notFound);
 
