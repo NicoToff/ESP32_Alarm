@@ -79,7 +79,7 @@
             e.preventDefault();
             console.log(password.value);
             const validator = new RegExp("^[A-Za-z0-9]{1,20}$")
-            const pw = String(password?.value);
+            const pw = password?.value;
             if (validator.test(pw)) {
                 $.ajax({
                     type: "post",
@@ -92,9 +92,7 @@
                     }
                 });
             }
-            else {
-                alert("Input is not valid");
-            }
+            password.value = "";
         });
     </script>
 </body>

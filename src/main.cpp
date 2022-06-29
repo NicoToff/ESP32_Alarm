@@ -111,8 +111,7 @@ void setup()
                 request->send(200); });
 
     server.on("/pw", HTTP_POST, [](AsyncWebServerRequest *request)
-              { 
-                  Serial.println("Receiving PW ...");
+              {   Serial.println("Receiving PW ...");
                   String password = request->getParam(0)->value();
                   Serial.print("Received: ");
                   Serial.println(password);
