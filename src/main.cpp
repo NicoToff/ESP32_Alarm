@@ -112,21 +112,16 @@ void setup()
 
     server.on("/pw", HTTP_POST, [](AsyncWebServerRequest *request)
               { 
-                  Serial.println("Getting PW ...");
-                  Serial.println(request->contentType());
-                  Serial.println(request->params());
-                  Serial.println(request->contentLength());
-                  if (request->hasParam(PARAM_MESSAGE, true)) {
-                        String password = request->getParam(PARAM_MESSAGE, true)->value();
-                        Serial.print("Received: ");
-                        Serial.println(password);
-                        if (password.equals(SECRET)) {
-                            request->send(200, "application/json", "{status: PW OK}");
-                        } else {
-                            request->send(200, "application/json", "{status: PW WRONG}");
-                        }
+                  Serial.println("Receiving PW ...");
+                  String password = request->getParam(0)->value();
+                  Serial.print("Received: ");
+                  Serial.println(password);
+                  if (password.equals(SECRET)) {
+                      request->send(200, "application/json", "OK");
+                  } else {
+                      request->send(200, "application/json", "WRONG");
                   }
-                  request->send(200, "application/json", "OK"); });
+              });
 
     server.onNotFound(notFound);
 
