@@ -81,10 +81,10 @@
             $.ajax({
                 type: "post",
                 url: "/pw",
-                data: password?.value,
+                data: String(password?.value),
                 dataType: "text",
                 success: function (response) {
-                    console.log(response);
+                    console.log(JSON.parse(response));
                 }
             });
         });
