@@ -87,13 +87,18 @@
                     data: pw,
                     dataType: "text",
                     success: function (response) {
-                        if (response === "OK")
+                        if (response === "OK") {
                             btnBeep.removeAttribute("disabled");
+                            localStorage.setItem("pw", "valid");
+                        }
                     }
                 });
             }
             password.value = "";
         });
+        if (localStorage.getItem("pw") === "valid") {
+            btnBeep.removeAttribute("disabled");
+        }
     </script>
 </body>
 
