@@ -69,6 +69,7 @@ void setup()
         Serial.print("HTTP Code: ");
         Serial.print(httpReturnCode);
         HTML_index_file = httpClient.getString();
+        Serial.println(HTML_index_file);
     } while (!HTTP_CODE_OK);
     Serial.println(" = OK");
     httpClient.end(); // Frees the resources
@@ -111,7 +112,10 @@ void setup()
 
     server.on("/pw", HTTP_POST, [](AsyncWebServerRequest *request)
               { 
+                  Serial.println("Getting PW ...");
                   String password = request->getParam(PARAM_MESSAGE, true)->value();
+                  Serial.print("Received: ");
+                  Serial.println(password);
                   if (password.equals(SECRET)) {
                       request->send(200, "application/json", "{status: PW OK}");
                   } else {
