@@ -29,7 +29,7 @@
                     <div class="form-group">
                         <label class="form-label mt-4">Enter password</label>
                         <div class="form-floating mb-3">
-                            <input type="password" class="form-control" id="password-input" pattern="[A-Za-z0-9]{1,20}">
+                            <input type="password" class="form-control" id="password-input">
                             <label for="password-input">Password</label>
                         </div>
                     </div>
@@ -78,16 +78,22 @@
         btnSubmitPw.addEventListener("click", e => {
             e.preventDefault();
             console.log(password.value);
-            $.ajax({
-                type: "post",
-                url: "/pw",
-                data: String(password?.value),
-                dataType: "text",
-                success: function (response) {
-                    if (response === "OK")
-                        btnBeep.removeAttribute("disabled");
-                }
-            });
+            const pw = String(password?.value);
+            if (pw.length > 0) {
+                $.ajax({
+                    type: "post",
+                    url: "/pw",
+                    data: pw,
+                    dataType: "text",
+                    success: function (response) {
+                        if (response === "OK")
+                            btnBeep.removeAttribute("disabled");
+                    }
+                });
+            }
+            else {
+                alert("Input is not valid");
+            }
         });
     </script>
 </body>
