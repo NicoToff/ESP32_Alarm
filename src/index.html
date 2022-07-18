@@ -35,8 +35,8 @@
                     </div>
                     <button type="submit" class="btn btn-primary" id="submit-pw">Submit</button>
                 </form>
-                <button class="btn btn-lg btn-success" id="beeper" disabled>Beep</button>
-                <button class="btn btn-lg btn-warning" id="stopper">Stop</button>
+                <button class="btn btn-lg btn-success" id="alarm" disabled>Set Alarm</button>
+                <button class="btn btn-lg btn-warning" id="stopper" disabled>Stop</button>
             </div>
             <div class="tab-pane fade p-3" id="tab2">
                 <p>Food truck fixie locavore, accusamus mcsweeney's marfa nulla single-origin coffee squid. Exercitation
@@ -63,13 +63,13 @@
         integrity='sha384-kjU+l4N0Yf4ZOJErLsIcvOU2qSb74wXpOhqTvwVx3OElZRweTnQ6d31fXEoRD1Jy'
         crossorigin='anonymous'></script>
     <script>
-        const btnBeep = document.getElementById("beeper");
+        const btnAlarm = document.getElementById("alarm");
         const btnStop = document.getElementById("stopper");
         const btnSubmitPw = document.getElementById("submit-pw");
-        const password = document.getElementById("password-input");
-        btnBeep.addEventListener("click", e => {
+        const passwordField = document.getElementById("password-input");
+        btnAlarm.addEventListener("click", e => {
             e.preventDefault();
-            $.post("/beep");
+            $.post("/alarm");
         });
         btnStop.addEventListener("click", e => {
             e.preventDefault();
@@ -77,9 +77,9 @@
         });
         btnSubmitPw.addEventListener("click", e => {
             e.preventDefault();
-            console.log(password.value);
+            console.log(passwordField.value);
             const validator = new RegExp("^[A-Za-z0-9]{1,20}$")
-            const pw = password?.value;
+            const pw = passwordField?.value;
             if (validator.test(pw)) {
                 $.ajax({
                     type: "post",
@@ -88,16 +88,17 @@
                     dataType: "text",
                     success: function (response) {
                         if (response === "OK") {
-                            btnBeep.removeAttribute("disabled");
+                            btnAlarm.removeAttribute("disabled");
                             localStorage.setItem("pw", "valid");
                         }
                     }
                 });
             }
-            password.value = "";
+            passwordField.value = "";
         });
         if (localStorage.getItem("pw") === "valid") {
-            btnBeep.removeAttribute("disabled");
+            btnAlarm.removeAttribute("disabled");
+            btnStop.removeAttribute("disabled");
         }
     </script>
 </body>

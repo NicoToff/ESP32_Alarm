@@ -8,11 +8,19 @@
 //#include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <HTTPClient.h>
+#include <PubSubClient.h>
 
 // Create this file and create those variables in it:
 // const char *ssid = YOUR_SSID;
 // const char *password = YOUR_PASSWORD;
+// #define SECRET "xxxxx"
+
 #include "ssid_password.h"
+
+#define echoPin 33
+#define trigPin 32
+#define NBR_MEASUREMENTS 10
+int count = 0;
 
 #define buzzer 25
 
@@ -32,6 +40,8 @@ void notFound(AsyncWebServerRequest *request)
 void setup()
 {
     Serial.begin(115200);
+    pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
+    pinMode(echoPin, INPUT);  // Sets the echoPin as an Input
     pinMode(buzzer, OUTPUT);
 
     // Setting Static IP
@@ -105,7 +115,7 @@ void setup()
     //               }
     //               request->send(200, "text/plain", "Hello, POST: " + message); });
 
-    server.on("/beep", HTTP_POST, [](AsyncWebServerRequest *request)
+    server.on("/alarm", HTTP_POST, [](AsyncWebServerRequest *request)
               {
                 Serial.println("BEEEP!");
                 digitalWrite(buzzer, HIGH);
@@ -133,6 +143,28 @@ void setup()
     server.begin();
 }
 
+int ultrasonicReading(int nbr_measurements)
+{
+    int totalMeasurements = 0;
+    for (size_t i = 0; i < nbr_measurements; i++)
+    {
+        // Clears the trigPin
+        digitalWrite(trigPin, LOW);
+        delayMicroseconds(2);
+        // Sets the trigPin on HIGH state for 10 micro seconds
+        digitalWrite(trigPin, HIGH);
+        delayMicroseconds(10);
+        digitalWrite(trigPin, LOW);
+        // Reads the echoPin, returns the sound wave travel time in microseconds
+        totalMeasurements += pulseIn(echoPin, HIGH);
+    }
+    int averageMeasurement = totalMeasurements /= nbr_measurements;
+
+    // Returning an average of "nbr_measurements" readings
+    return averageMeasurement;
+}
+
 void loop()
 {
+    Serial.printf("Sonic reading: %d\n", ultrasonicReading(NBR_MEASUREMENTS));
 }

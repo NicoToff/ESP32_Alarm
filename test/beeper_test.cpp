@@ -17,7 +17,7 @@ void setup()
     Serial.begin(9600); // Starts the serial communication
 }
 
-int distanceMeasurement(int nbr_measurements)
+int ultrasonicReading(int nbr_measurements)
 {
     int duration = 0;
     for (size_t i = 0; i < nbr_measurements; i++)
@@ -49,7 +49,7 @@ void display(int distance, int count)
 
 void loop()
 {
-    distance = distanceMeasurement(NBR_MEASUREMENTS);
+    distance = ultrasonicReading(NBR_MEASUREMENTS);
     display(distance, count);
 
     if (distance < 30 && count <= 5)
@@ -61,7 +61,7 @@ void loop()
     {
         Serial.print("BEEEEP ... ");
         digitalWrite(buzzer, HIGH);
-        distance = distanceMeasurement(NBR_MEASUREMENTS);
+        distance = ultrasonicReading(NBR_MEASUREMENTS);
         display(distance, count);
         if (distance > 100)
         {
