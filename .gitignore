@@ -4,3 +4,4 @@
 .vscode/launch.json
 .vscode/ipch
 src/ssid_password.h
+src/mqtt.h

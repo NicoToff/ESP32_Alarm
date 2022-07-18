@@ -16,6 +16,7 @@
 // #define SECRET "xxxxx"
 
 #include "ssid_password.h"
+#include "mqtt.h"
 
 #define echoPin 33
 #define trigPin 32
@@ -26,6 +27,8 @@ int count = 0;
 
 AsyncWebServer server(80);
 HTTPClient httpClient;
+WiFiClient wifiClient;
+PubSubClient mqttClient(mqttServer, mqttPort, wifiClient); // Arguments found in "mqtt.h"
 
 const char *PARAM_MESSAGE = "message";
 
@@ -74,8 +77,8 @@ void setup()
     Serial.print("WiFi connected\nIP Address: ");
     Serial.println(WiFi.localIP());
 
-    // Fetching HTML index data
-    // stored on GitHub instead of a clunky String inside this file
+    // UI ----------------------------------------------------------------------------------
+    // Fetching HTML index data stored on GitHub instead of a clunky String inside this file
     int httpReturnCode = 0;
     do
     {
@@ -89,6 +92,7 @@ void setup()
     Serial.println(" = OK");
     httpClient.end(); // Frees the resources
 
+    // Server routes on ESP32 --------------------------------------------------------------
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", HTML_index_file); });
 
@@ -141,6 +145,15 @@ void setup()
     server.onNotFound(notFound);
 
     server.begin();
+
+    // MQTT ---------------------------------------------------------------------------
+    Serial.print("Connecting to MQTT");
+    while (!mqttClient.connect("esp32", mqttUser, mqttPassword))
+    {
+        Serial.print(".");
+        delay(250);
+    }
+    Serial.println("\nConnected!");
 }
 
 int ultrasonicReading(int nbr_measurements)
@@ -166,5 +179,8 @@ int ultrasonicReading(int nbr_measurements)
 
 void loop()
 {
-    Serial.printf("Sonic reading: %d\n", ultrasonicReading(NBR_MEASUREMENTS));
+    int reading = ultrasonicReading(NBR_MEASUREMENTS);
+    Serial.printf("Sonic reading: %d\n", reading);
+    bool sent = mqttClient.publish("home/alarm/reading", String(reading).c_str());
+    Serial.printf("Sent to MQTT = %d\n", sent);
 }
