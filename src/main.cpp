@@ -3,6 +3,7 @@
               2022
 ******************************* */
 
+// LIB IMPORTS ------------------------------------
 #include <Arduino.h>
 #include <WiFi.h>
 //#include <AsyncTCP.h>
@@ -10,41 +11,50 @@
 #include <HTTPClient.h>
 #include <PubSubClient.h>
 
-// Create this file and create those variables in it:
+// WIFI -------------------------------------------
+// Create this file and set those variables in it:
 // const char *ssid = YOUR_SSID;
 // const char *password = YOUR_PASSWORD;
 // #define SECRET "xxxxx"
-
 #include "ssid_password.h"
+
+// MQTT -------------------------------------------
+// Create this file and set those variables in it:
+// const char *mqttUser = "esp32alarm";
+// const char *mqttPassword = "p32/72alarm";
+// const char *mqttServer = "192.168.1.99";
+// const int mqttPort = 1883;
 #include "mqtt.h"
 
+// PINS --------------------------------------------
 #define echoPin 33
 #define trigPin 32
-#define NBR_MEASUREMENTS 10
-int count = 0;
-
 #define buzzer 25
 
+// OBJECT INSTANCES --------------------------------
 AsyncWebServer server(80);
 HTTPClient httpClient;
 WiFiClient wifiClient;
 PubSubClient mqttClient(mqttServer, mqttPort, wifiClient); // Arguments found in "mqtt.h"
 
-const char *PARAM_MESSAGE = "message";
-
-// HTML & CSS contents which display on web server
-String HTML_index_file;
+// Other values ------------------------------------
+bool settingAlarm = false;
+bool alarmSet = false;
+const int NBR_MEASUREMENTS = 10;
+int count = 0;
+String HTML_index_file;                // HTML & CSS contents which display on web server
+const char *PARAM_MESSAGE = "message"; // used for tests
 
 void notFound(AsyncWebServerRequest *request)
 {
-    request->send(404, "text/plain", "404! Pag not found");
+    request->send(404, "text/plain", "404! Page not found");
 }
 
 void setup()
 {
     Serial.begin(115200);
-    pinMode(trigPin, OUTPUT); // Sets the trigPin as an Output
-    pinMode(echoPin, INPUT);  // Sets the echoPin as an Input
+    pinMode(trigPin, OUTPUT);
+    pinMode(echoPin, INPUT);
     pinMode(buzzer, OUTPUT);
 
     // Setting Static IP
@@ -87,10 +97,10 @@ void setup()
         Serial.print("HTTP Code: ");
         Serial.print(httpReturnCode);
         HTML_index_file = httpClient.getString();
-        Serial.println(HTML_index_file);
+        // Serial.println(HTML_index_file);
     } while (!HTTP_CODE_OK);
     Serial.println(" = OK");
-    httpClient.end(); // Frees the resources
+    httpClient.end(); // Frees the resources once it's done
 
     // Server routes on ESP32 --------------------------------------------------------------
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -121,12 +131,24 @@ void setup()
 
     server.on("/alarm", HTTP_POST, [](AsyncWebServerRequest *request)
               {
-                Serial.println("BEEEP!");
-                digitalWrite(buzzer, HIGH);
+                if(!settingAlarm) {
+                    Serial.println("Alarm setting...");
+                    settingAlarm = true;
+                } else {
+                    Serial.println("Alarm is setting. Press STOP to stop.");
+                }
                 request->send(200); });
 
     server.on("/stop", HTTP_POST, [](AsyncWebServerRequest *request)
-              { digitalWrite(buzzer, LOW);
+              { if(alarmSet) {
+                    Serial.println("Alarm stopped!");
+                    alarmSet = false;
+                }
+                if(settingAlarm) {
+                    Serial.println("Alarm setting interrupted!");
+                    settingAlarm = false;
+                }
+
                 request->send(200); });
 
     server.on("/pw", HTTP_POST, [](AsyncWebServerRequest *request)
@@ -146,14 +168,7 @@ void setup()
 
     server.begin();
 
-    // MQTT ---------------------------------------------------------------------------
-    Serial.print("Connecting to MQTT");
-    while (!mqttClient.connect("esp32", mqttUser, mqttPassword))
-    {
-        Serial.print(".");
-        delay(250);
-    }
-    Serial.println("\nConnected!");
+    Serial.println("ESP32 Alarm is ready to use!");
 }
 
 int ultrasonicReading(int nbr_measurements)
@@ -179,8 +194,44 @@ int ultrasonicReading(int nbr_measurements)
 
 void loop()
 {
-    int reading = ultrasonicReading(NBR_MEASUREMENTS);
-    Serial.printf("Sonic reading: %d\n", reading);
-    bool sent = mqttClient.publish("home/alarm/reading", String(reading).c_str());
-    Serial.printf("Sent to MQTT = %d\n", sent);
+    if (settingAlarm && !alarmSet)
+    {
+        const int TIME_DELAY = 10;
+        for (size_t i = 0; i < TIME_DELAY; i++)
+        {
+            delay(1000);
+            if (!settingAlarm)
+                break;
+            Serial.printf("Alarm on in %d...\n", TIME_DELAY - i);
+        }
+        if (settingAlarm)
+        {
+            Serial.println("Alarm set!");
+            settingAlarm = false;
+            alarmSet = true;
+        }
+    }
+
+    if (alarmSet)
+    {
+        // MQTT ---------------------------------------------------------------------------
+        while (!mqttClient.connected())
+        {
+            Serial.print("Connecting to MQTT...");
+            while (!mqttClient.connect("esp32", mqttUser, mqttPassword))
+            {
+                Serial.print(".");
+                delay(10);
+            }
+            Serial.println("\nConnected!");
+        }
+
+        int reading = ultrasonicReading(NBR_MEASUREMENTS);
+        Serial.printf("Sonic reading: %d\n", reading);
+        bool sent = mqttClient.publish("home/alarm/reading", String(reading).c_str());
+        if (!sent)
+        {
+            Serial.println("Couldn't send to MQTT!");
+        }
+    }
 }
