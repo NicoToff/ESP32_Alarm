@@ -26,16 +26,21 @@
 // const int mqttPort = 1883;
 #include "mqtt.h"
 
-// PINS --------------------------------------------
+// HC-SR04 PINS ------------------------------------
 #define echoPin 33
 #define trigPin 32
+
+// HC-SR501 PIN ------------------------------------
+#define motionSensor 27
+
+// BUZZER PIN --------------------------------------
 #define buzzer 25
 
 // OBJECT INSTANCES --------------------------------
 AsyncWebServer server(80);
 HTTPClient httpClient;
 WiFiClient wifiClient;
-PubSubClient mqttClient(mqttServer, mqttPort, wifiClient); // Arguments found in "mqtt.h"
+PubSubClient mqttClient(mqttServer, mqttPort, wifiClient); // Arguments are found in "mqtt.h"
 
 // Other values ------------------------------------
 bool settingAlarm = false;
@@ -106,7 +111,7 @@ void setup()
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", HTML_index_file); });
 
-    // Examples of parametized GET and POST requests
+    /*************** Examples of parametized GET and POST requests *************************/
     // // Send a GET request to <IP>/get?message=<message>
     // server.on("/get", HTTP_GET, [](AsyncWebServerRequest *request)
     //           {
@@ -128,6 +133,7 @@ void setup()
     //                   message = "No message sent";
     //               }
     //               request->send(200, "text/plain", "Hello, POST: " + message); });
+    /* *********************************************************************************** */
 
     server.on("/alarm", HTTP_POST, [](AsyncWebServerRequest *request)
               {
@@ -192,6 +198,8 @@ int ultrasonicReading(int nbr_measurements)
     return averageMeasurement;
 }
 
+int lastValue = 0;
+
 void loop()
 {
     if (settingAlarm && !alarmSet)
@@ -214,24 +222,49 @@ void loop()
 
     if (alarmSet)
     {
-        // MQTT ---------------------------------------------------------------------------
+        // MQTT Connection -----------------------------------------------------------------
         while (!mqttClient.connected())
         {
             Serial.print("Connecting to MQTT...");
             while (!mqttClient.connect("esp32", mqttUser, mqttPassword))
             {
                 Serial.print(".");
-                delay(10);
+                delay(1);
             }
             Serial.println("\nConnected!");
         }
 
-        int reading = ultrasonicReading(NBR_MEASUREMENTS);
-        Serial.printf("Sonic reading: %d\n", reading);
-        bool sent = mqttClient.publish("home/alarm/reading", String(reading).c_str());
-        if (!sent)
+        /********************** Readings testing with HS-SR501 ***************************/
+        int motionDetected = digitalRead(motionSensor);
+        if (motionDetected != lastValue)
         {
-            Serial.println("Couldn't send to MQTT!");
+            bool sent;
+            if (motionDetected == HIGH)
+            {
+                Serial.println("New motion detected!");
+                sent = mqttClient.publish("home/alarm/reading", "New movement");
+            }
+            else
+            {
+                Serial.println("Motion stopped");
+                sent = mqttClient.publish("home/alarm/reading", "End of movement");
+            }
+            lastValue = motionDetected;
+            if (!sent)
+            {
+                Serial.println("Couldn't send to MQTT!");
+            }
         }
+        /*********************************************************************************/
+
+        /********************** Readings testing with HS-SR04 ****************************/
+        // int reading = ultrasonicReading(NBR_MEASUREMENTS);
+        // Serial.printf("Sonic reading: %d\n", reading);
+        // bool sent = mqttClient.publish("home/alarm/reading", String(reading).c_str());
+        // if (!sent)
+        // {
+        //     Serial.println("Couldn't send to MQTT!");
+        // }
+        /*********************************************************************************/
     }
 }
