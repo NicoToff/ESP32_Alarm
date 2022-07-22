@@ -198,6 +198,21 @@ int ultrasonicReading(int nbr_measurements)
     return averageMeasurement;
 }
 
+void mqttConnect()
+{
+    // MQTT Connection -----------------------------------------------------------------
+    while (!mqttClient.connected())
+    {
+        Serial.print("Connecting to MQTT...");
+        while (!mqttClient.connect("esp32", mqttUser, mqttPassword))
+        {
+            Serial.print(".");
+            delay(1);
+        }
+        Serial.println("\nConnected!");
+    }
+}
+
 int lastValue = 0;
 
 void loop()
@@ -222,22 +237,11 @@ void loop()
 
     if (alarmSet)
     {
-        // MQTT Connection -----------------------------------------------------------------
-        while (!mqttClient.connected())
-        {
-            Serial.print("Connecting to MQTT...");
-            while (!mqttClient.connect("esp32", mqttUser, mqttPassword))
-            {
-                Serial.print(".");
-                delay(1);
-            }
-            Serial.println("\nConnected!");
-        }
-
         /********************** Readings testing with HS-SR501 ***************************/
         int motionDetected = digitalRead(motionSensor);
         if (motionDetected != lastValue)
         {
+            mqttConnect();
             bool sent;
             if (motionDetected == HIGH)
             {
