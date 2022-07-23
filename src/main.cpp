@@ -12,23 +12,19 @@
 #include <PubSubClient.h>
 
 // WIFI -------------------------------------------
-// Create this file and set those variables in it:
+/* Create this file and set those variables in it: */
 // const char *ssid = YOUR_SSID;
 // const char *password = YOUR_PASSWORD;
 // #define SECRET "xxxxx"
 #include "ssid_password.h"
 
 // MQTT -------------------------------------------
-// Create this file and set those variables in it:
+/* Create this file and set those variables in it: */
 // const char *mqttUser = "esp32alarm";
 // const char *mqttPassword = "p32/72alarm";
 // const char *mqttServer = "192.168.1.99";
 // const int mqttPort = 1883;
 #include "mqtt.h"
-
-// HC-SR04 PINS ------------------------------------
-#define echoPin 33
-#define trigPin 32
 
 // HC-SR501 PIN ------------------------------------
 #define motionSensor 27
@@ -58,8 +54,6 @@ void notFound(AsyncWebServerRequest *request)
 void setup()
 {
     Serial.begin(115200);
-    pinMode(trigPin, OUTPUT);
-    pinMode(echoPin, INPUT);
     pinMode(buzzer, OUTPUT);
 
     // Setting Static IP
@@ -111,30 +105,6 @@ void setup()
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(200, "text/html", HTML_index_file); });
 
-    /*************** Examples of parametized GET and POST requests *************************/
-    // // Send a GET request to <IP>/get?message=<message>
-    // server.on("/get", HTTP_GET, [](AsyncWebServerRequest *request)
-    //           {
-    //               String message;
-    //               if (request->hasParam(PARAM_MESSAGE)) {
-    //                   message = request->getParam(PARAM_MESSAGE)->value();
-    //               } else {
-    //                   message = "No message sent";
-    //               }
-    //               request->send(200, "text/plain", "Hello, GET: " + message); });
-
-    // // Send a POST request to <IP>/post with a form field message set to <message>
-    // server.on("/post", HTTP_POST, [](AsyncWebServerRequest *request)
-    //           {
-    //               String message;
-    //               if (request->hasParam(PARAM_MESSAGE, true)) {
-    //                   message = request->getParam(PARAM_MESSAGE, true)->value();
-    //               } else {
-    //                   message = "No message sent";
-    //               }
-    //               request->send(200, "text/plain", "Hello, POST: " + message); });
-    /* *********************************************************************************** */
-
     server.on("/alarm", HTTP_POST, [](AsyncWebServerRequest *request)
               {
                 if(!settingAlarm) {
@@ -175,27 +145,6 @@ void setup()
     server.begin();
 
     Serial.println("ESP32 Alarm is ready to use!");
-}
-
-int ultrasonicReading(int nbr_measurements)
-{
-    int totalMeasurements = 0;
-    for (size_t i = 0; i < nbr_measurements; i++)
-    {
-        // Clears the trigPin
-        digitalWrite(trigPin, LOW);
-        delayMicroseconds(2);
-        // Sets the trigPin on HIGH state for 10 micro seconds
-        digitalWrite(trigPin, HIGH);
-        delayMicroseconds(10);
-        digitalWrite(trigPin, LOW);
-        // Reads the echoPin, returns the sound wave travel time in microseconds
-        totalMeasurements += pulseIn(echoPin, HIGH);
-    }
-    int averageMeasurement = totalMeasurements /= nbr_measurements;
-
-    // Returning an average of "nbr_measurements" readings
-    return averageMeasurement;
 }
 
 void mqttConnect()
@@ -259,16 +208,6 @@ void loop()
                 Serial.println("Couldn't send to MQTT!");
             }
         }
-        /*********************************************************************************/
-
-        /********************** Readings testing with HS-SR04 ****************************/
-        // int reading = ultrasonicReading(NBR_MEASUREMENTS);
-        // Serial.printf("Sonic reading: %d\n", reading);
-        // bool sent = mqttClient.publish("home/alarm/reading", String(reading).c_str());
-        // if (!sent)
-        // {
-        //     Serial.println("Couldn't send to MQTT!");
-        // }
         /*********************************************************************************/
     }
 }
