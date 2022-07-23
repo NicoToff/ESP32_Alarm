@@ -57,6 +57,21 @@ String HTML_index_file; // HTML & CSS contents which display on web server
 int lastValue = 0;
 unsigned long prevTime;
 
+void mqttConnect()
+{
+    // MQTT Connection -----------------------------------------------------------------
+    while (!mqttClient.connected())
+    {
+        Serial.print("Connecting to MQTT...");
+        while (!mqttClient.connect("esp32", mqttUser, mqttPassword))
+        {
+            Serial.print(".");
+            delay(1);
+        }
+        Serial.println("\nConnected!");
+    }
+}
+
 void notFound(AsyncWebServerRequest *request)
 {
     request->send(404, "text/plain", "404! Page not found");
@@ -137,6 +152,8 @@ void setup()
                     Serial.println("Alarm setting interrupted!");
                     settingAlarm = false;
                 }
+                mqttConnect();
+                mqttClient.publish("home/esp32/alarm", "ALARM OFF");
 
                 request->send(200); });
 
@@ -162,25 +179,11 @@ void setup()
     Serial.println("ESP32 Alarm is ready to use!");
 }
 
-void mqttConnect()
-{
-    // MQTT Connection -----------------------------------------------------------------
-    while (!mqttClient.connected())
-    {
-        Serial.print("Connecting to MQTT...");
-        while (!mqttClient.connect("esp32", mqttUser, mqttPassword))
-        {
-            Serial.print(".");
-            delay(1);
-        }
-        Serial.println("\nConnected!");
-    }
-}
+const unsigned long TEMP_READING_DELAY = 120000; // in ms
+const int ALARM_TIME_DELAY = 10;                 // in sec
 
 void loop()
 {
-    const int TEMP_READING_DELAY = 120000; // in ms
-
     if (millis() - prevTime >= TEMP_READING_DELAY)
     {
         prevTime = millis();
@@ -208,17 +211,18 @@ void loop()
 
     if (settingAlarm && !alarmSet)
     {
-        const int TIME_DELAY = 10;
-        for (size_t i = 0; i < TIME_DELAY; i++)
+        for (size_t i = 0; i < ALARM_TIME_DELAY; i++)
         {
             delay(1000);
             if (!settingAlarm)
                 break;
-            Serial.printf("Alarm on in %d...\n", TIME_DELAY - i);
+            Serial.printf("Alarm on in %d...\n", ALARM_TIME_DELAY - i);
         }
         if (settingAlarm)
         {
             Serial.println("Alarm set!");
+            mqttConnect();
+            mqttClient.publish("home/esp32/alarm", "ALARM ON");
             settingAlarm = false;
             alarmSet = true;
         }
