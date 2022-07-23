@@ -139,7 +139,7 @@ void setup()
                     Serial.println("Alarm setting...");
                     settingAlarm = true;
                 } else {
-                    Serial.println("Alarm is setting. Press STOP to stop.");
+                    Serial.println("Alarm is set or setting. Press STOP to stop.");
                 }
                 request->send(200); });
 
@@ -147,15 +147,18 @@ void setup()
               { if(alarmSet) {
                     Serial.println("Alarm stopped!");
                     alarmSet = false;
+                    mqttConnect();
+                    mqttClient.publish("home/esp32/alarm", "ALARM OFF");
+                    request->send(200);
                 }
-                if(settingAlarm) {
+                else if(settingAlarm) {
                     Serial.println("Alarm setting interrupted!");
                     settingAlarm = false;
-                }
-                mqttConnect();
-                mqttClient.publish("home/esp32/alarm", "ALARM OFF");
-
-                request->send(200); });
+                    mqttConnect();
+                    mqttClient.publish("home/esp32/alarm", "ALARM OFF");
+                    request->send(200);
+                }                
+                request->send(204); });
 
     server.on("/pw", HTTP_POST, [](AsyncWebServerRequest *request)
               {   Serial.println("Receiving PW ...");
