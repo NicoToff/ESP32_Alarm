@@ -10,6 +10,8 @@
 #include <ESPAsyncWebServer.h>
 #include <HTTPClient.h>
 #include <PubSubClient.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 // WIFI -------------------------------------------
 /* Create this file and set those variables in it: */
@@ -29,6 +31,9 @@
 // HC-SR501 PIN ------------------------------------
 #define motionSensor 27
 
+// DS18B20 BUS PIN ---------------------------------
+#define ONE_WIRE_BUS 33
+
 // BUZZER PIN --------------------------------------
 #define buzzer 25
 
@@ -37,6 +42,10 @@ AsyncWebServer server(80);
 HTTPClient httpClient;
 WiFiClient wifiClient;
 PubSubClient mqttClient(mqttServer, mqttPort, wifiClient); // Arguments are found in "mqtt.h"
+// Setup communication for OneWire devices
+OneWire oneWire(ONE_WIRE_BUS);
+// Pass our oneWire reference to Dallas Temperature lib
+DallasTemperature tempSensor(&oneWire);
 
 // Other values ------------------------------------
 bool settingAlarm = false;
@@ -55,6 +64,8 @@ void setup()
 {
     Serial.begin(115200);
     pinMode(buzzer, OUTPUT);
+    pinMode(motionSensor, INPUT);
+    tempSensor.begin();
 
     // Setting Static IP
     IPAddress local_IP(192, 168, 1, 191);
