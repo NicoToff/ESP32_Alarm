@@ -44,15 +44,16 @@ WiFiClient wifiClient;
 PubSubClient mqttClient(mqttServer, mqttPort, wifiClient); // Arguments are found in "mqtt.h"
 // Setup communication for OneWire devices
 OneWire oneWire(ONE_WIRE_BUS);
-// Pass our oneWire reference to Dallas Temperature lib
+// Usable object to get temperatures
 DallasTemperature tempSensor(&oneWire);
 
-// Other values ------------------------------------
+/* Other values ------------------------------------ */
 bool settingAlarm = false;
 bool alarmSet = false;
 const int NBR_MEASUREMENTS = 10;
 int count = 0;
-String HTML_index_file; // HTML & CSS contents which display on web server
+// HTML & CSS contents which to on web server
+String HTML_index_file;
 
 int lastValue = 0;
 unsigned long prevTime;
@@ -71,6 +72,68 @@ void mqttConnect()
         Serial.println("\nConnected!");
     }
 }
+
+// TODO refactor this function and create an MQTT publish one
+float getTempC(int tempCOffset = 0)
+{
+    mqttConnect();
+    tempSensor.requestTemperatures(); // Method to get temperatures
+    // We use the function ByIndex to get the temperature from the first and only sensor.
+    float tempC = tempSensor.getTempCByIndex(0);
+    tempC += tempCOffset;
+    // Check if reading was successful
+    bool sent;
+    if (tempC != DEVICE_DISCONNECTED_C)
+    {
+        Serial.printf("Temp: %.3f°C\n", tempC);
+        sent = mqttClient.publish("home/esp32/temperature", String(tempC).c_str());
+    }
+    else
+    {
+        Serial.println("Couldn't read DS18B20");
+        sent = mqttClient.publish("home/esp32/temperature", "Couldn't read DS18B20");
+    }
+    if (!sent)
+    {
+        Serial.println("Couldn't send to MQTT!");
+    }
+    return tempC;
+}
+
+/* Buzzer ----------------------------------------------------- */
+// Defines the length of beeps
+typedef enum
+{
+    SHORT_BEEP,
+    LONG_BEEP
+} beep_length_t;
+
+/**
+ * @brief Makes the piezo buzzer beep for a given number of times. Beeps can be SHORT_BEEP or LONG_BEEP and can go from 1 to 10.
+ *
+ * @param amount number of beeps (default = 1)
+ * @param LENGTH length of the beep(s) (default = SHORT_BEEP)
+ */
+void beep(int amount = 1, int LENGTH = SHORT_BEEP)
+{
+    if (amount < 1)
+    {
+        amount = 1;
+    }
+    else if (amount > 10)
+    {
+        amount = 10;
+    }
+    for (int i = 0; i < amount; i++)
+    {
+        delay(25);
+        digitalWrite(buzzer, HIGH);
+        delay(LENGTH == LONG_BEEP ? 200 : 50);
+        digitalWrite(buzzer, LOW);
+        delay(25);
+    }
+}
+// -------------------------------------------------------------
 
 void notFound(AsyncWebServerRequest *request)
 {
@@ -148,14 +211,14 @@ void setup()
                     Serial.println("Alarm stopped!");
                     alarmSet = false;
                     mqttConnect();
-                    mqttClient.publish("home/esp32/alarm", "ALARM OFF");
+                    mqttClient.publish("home/esp32/alarm/status", "ALARM OFF");
                     request->send(200);
                 }
                 else if(settingAlarm) {
                     Serial.println("Alarm setting interrupted!");
                     settingAlarm = false;
                     mqttConnect();
-                    mqttClient.publish("home/esp32/alarm", "ALARM OFF");
+                    mqttClient.publish("home/esp32/alarm/status", "ALARM OFF");
                     request->send(200);
                 }                
                 request->send(204); });
@@ -177,55 +240,42 @@ void setup()
 
     server.begin();
 
+    // Gets temperature a first time, then every so often
+    getTempC(-1);
     prevTime = millis();
 
     Serial.println("ESP32 Alarm is ready to use!");
+    beep(3, SHORT_BEEP);
 }
 
-const unsigned long TEMP_READING_DELAY = 120000; // in ms
-const int ALARM_TIME_DELAY = 10;                 // in sec
+const unsigned long TEMP_READING_DELAY = 10; // in min
+const int ALARM_TIME_DELAY = 10;             // in sec
 
 void loop()
 {
-    if (millis() - prevTime >= TEMP_READING_DELAY)
+    // Gets temperature every so often
+    if (millis() - prevTime >= TEMP_READING_DELAY * 60000)
     {
         prevTime = millis();
-        mqttConnect();
-        tempSensor.requestTemperatures(); // Method to get temperatures
-        // We use the function ByIndex to get the temperature from the first and only sensor.
-        float tempC = tempSensor.getTempCByIndex(0);
-        // Check if reading was successful
-        bool sent;
-        if (tempC != DEVICE_DISCONNECTED_C)
-        {
-            Serial.printf("Temp: %.3f°C\n", tempC);
-            sent = mqttClient.publish("home/esp32/temperature", String(tempC).c_str());
-        }
-        else
-        {
-            Serial.println("Couldn't read DS18B20");
-            sent = mqttClient.publish("home/esp32/temperature", "Couldn't read DS18B20");
-        }
-        if (!sent)
-        {
-            Serial.println("Couldn't send to MQTT!");
-        }
+        getTempC(-1);
     }
 
     if (settingAlarm && !alarmSet)
     {
         for (size_t i = 0; i < ALARM_TIME_DELAY; i++)
         {
-            delay(1000);
             if (!settingAlarm)
-                break;
+                break; // Exiting the loop if STOP is pressed
+            delay(900);
             Serial.printf("Alarm on in %d...\n", ALARM_TIME_DELAY - i);
+            beep(); // One short beep, this takes 100 ms
         }
         if (settingAlarm)
         {
             Serial.println("Alarm set!");
             mqttConnect();
-            mqttClient.publish("home/esp32/alarm", "ALARM ON");
+            mqttClient.publish("home/esp32/alarm/status", "ALARM ON");
+            beep(5, LONG_BEEP);
             settingAlarm = false;
             alarmSet = true;
         }
@@ -242,12 +292,12 @@ void loop()
             if (motionDetected == HIGH)
             {
                 Serial.println("New motion detected!");
-                sent = mqttClient.publish("home/esp32/alarm", "New movement");
+                sent = mqttClient.publish("home/esp32/alarm/movement", "New movement");
             }
             else
             {
                 Serial.println("Motion stopped");
-                sent = mqttClient.publish("home/esp32/alarm", "End of movement");
+                sent = mqttClient.publish("home/esp32/alarm/movement", "End of movement");
             }
             lastValue = motionDetected;
             if (!sent)
