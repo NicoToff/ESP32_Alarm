@@ -1,4 +1,6 @@
 /*************** Examples of parametized GET and POST requests *************************/
+const char *PARAM_MESSAGE = "message"; // used for tests
+
 // // Send a GET request to <IP>/get?message=<message>
 // server.on("/get", HTTP_GET, [](AsyncWebServerRequest *request)
 //           {

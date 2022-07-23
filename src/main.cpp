@@ -52,8 +52,10 @@ bool settingAlarm = false;
 bool alarmSet = false;
 const int NBR_MEASUREMENTS = 10;
 int count = 0;
-String HTML_index_file;                // HTML & CSS contents which display on web server
-const char *PARAM_MESSAGE = "message"; // used for tests
+String HTML_index_file; // HTML & CSS contents which display on web server
+
+int lastValue = 0;
+unsigned long prevTime;
 
 void notFound(AsyncWebServerRequest *request)
 {
@@ -155,6 +157,8 @@ void setup()
 
     server.begin();
 
+    prevTime = millis();
+
     Serial.println("ESP32 Alarm is ready to use!");
 }
 
@@ -173,10 +177,35 @@ void mqttConnect()
     }
 }
 
-int lastValue = 0;
-
 void loop()
 {
+    const int TEMP_READING_DELAY = 120000; // in ms
+
+    if (millis() - prevTime >= TEMP_READING_DELAY)
+    {
+        prevTime = millis();
+        mqttConnect();
+        tempSensor.requestTemperatures(); // Method to get temperatures
+        // We use the function ByIndex to get the temperature from the first and only sensor.
+        float tempC = tempSensor.getTempCByIndex(0);
+        // Check if reading was successful
+        bool sent;
+        if (tempC != DEVICE_DISCONNECTED_C)
+        {
+            Serial.printf("Temp: %.3f°C\n", tempC);
+            sent = mqttClient.publish("home/esp32/temperature", String(tempC).c_str());
+        }
+        else
+        {
+            Serial.println("Couldn't read DS18B20");
+            sent = mqttClient.publish("home/esp32/temperature", "Couldn't read DS18B20");
+        }
+        if (!sent)
+        {
+            Serial.println("Couldn't send to MQTT!");
+        }
+    }
+
     if (settingAlarm && !alarmSet)
     {
         const int TIME_DELAY = 10;
@@ -206,12 +235,12 @@ void loop()
             if (motionDetected == HIGH)
             {
                 Serial.println("New motion detected!");
-                sent = mqttClient.publish("home/alarm/reading", "New movement");
+                sent = mqttClient.publish("home/esp32/alarm", "New movement");
             }
             else
             {
                 Serial.println("Motion stopped");
-                sent = mqttClient.publish("home/alarm/reading", "End of movement");
+                sent = mqttClient.publish("home/esp32/alarm", "End of movement");
             }
             lastValue = motionDetected;
             if (!sent)
