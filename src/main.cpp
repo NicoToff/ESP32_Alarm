@@ -28,9 +28,6 @@
 // const int mqttPort = 1883;
 #include "mqtt.h"
 
-// HC-SR501 PIN ------------------------------------
-#define motionSensor 27
-
 // DS18B20 BUS PIN ---------------------------------
 #define ONE_WIRE_BUS 33
 
@@ -54,50 +51,82 @@ const int NBR_MEASUREMENTS = 10;
 int count = 0;
 // HTML & CSS contents which to on web server
 String HTML_index_file;
-
-int lastValue = 0;
 unsigned long prevTime;
 
-void mqttConnect()
+// MQTT Connection -----------------------------------------------------------------
+// Tries to connect for 5 seconds, and then stops attempting if it keeps failing.
+// Does nothing is already connected to MQTT.
+bool mqttConnect()
 {
-    // MQTT Connection -----------------------------------------------------------------
-    while (!mqttClient.connected())
+    bool connected = mqttClient.connected();
+    if (!connected)
     {
+        unsigned long startTime = millis();
+        bool connected = false;
         Serial.print("Connecting to MQTT...");
-        while (!mqttClient.connect("esp32", mqttUser, mqttPassword))
+        while (!mqttClient.connect("esp32", mqttUser, mqttPassword) && millis() - startTime < 5000)
         {
             Serial.print(".");
-            delay(1);
+            delay(100);
         }
-        Serial.println("\nConnected!");
+        connected = mqttClient.connected();
+        connected ? Serial.println("\nConnected!") : Serial.println("\n FAILED!!!");
     }
+    return connected;
 }
+
+class MotionSensor
+{
+public:
+    int pin = -1;
+    String name;
+    bool movementDetected = false;
+    bool lastValue = false;
+    MotionSensor(int pin, String name = "motionSensor")
+    {
+        this->pin = pin;
+        this->name = name;
+    }
+    void checkForMovement()
+    {
+        this->movementDetected = digitalRead(this->pin);
+        if (this->movementDetected != this->lastValue)
+        {
+            mqttConnect();
+            bool sent;
+            if (this->movementDetected == HIGH)
+            {
+                Serial.println(this->name + " detected movement");
+                sent = mqttClient.publish(("home/esp32/alarm/movement/" + this->name).c_str(), "Movement");
+                if (!sent)
+                {
+                    Serial.println("Couldn't send to MQTT!");
+                }
+            }
+            // else
+            // {
+            //     Serial.println("Motion stopped");
+            //     // sent = mqttClient.publish("home/esp32/alarm/movement", "End of movement");
+            // }
+            this->lastValue = this->movementDetected;
+        }
+    }
+};
+
+// HC-SR501 ----------------------------------------
+MotionSensor motionSensors[] = {
+    MotionSensor(27, "PIRsensor1"),
+    MotionSensor(26, "PIRsensor2"),
+    MotionSensor(14, "PIRsensor3")};
 
 // TODO refactor this function and create an MQTT publish one
 float getTempC(int tempCOffset = 0)
 {
-    mqttConnect();
     tempSensor.requestTemperatures(); // Method to get temperatures
-    // We use the function ByIndex to get the temperature from the first and only sensor.
+    // Function xxxByIndex() to get the temperature from the first (and only) sensor.
     float tempC = tempSensor.getTempCByIndex(0);
     tempC += tempCOffset;
-    // Check if reading was successful
-    bool sent;
-    if (tempC != DEVICE_DISCONNECTED_C)
-    {
-        Serial.printf("Temp: %.3f°C\n", tempC);
-        sent = mqttClient.publish("home/esp32/temperature", String(tempC).c_str());
-    }
-    else
-    {
-        Serial.println("Couldn't read DS18B20");
-        sent = mqttClient.publish("home/esp32/temperature", "Couldn't read DS18B20");
-    }
-    if (!sent)
-    {
-        Serial.println("Couldn't send to MQTT!");
-    }
-    return tempC;
+    return tempC; // Will return -127 if DEVICE_DISCONNECTED_C
 }
 
 /* Buzzer ----------------------------------------------------- */
@@ -117,13 +146,10 @@ typedef enum
 void beep(int amount = 1, int LENGTH = SHORT_BEEP)
 {
     if (amount < 1)
-    {
         amount = 1;
-    }
     else if (amount > 10)
-    {
         amount = 10;
-    }
+
     for (int i = 0; i < amount; i++)
     {
         delay(25);
@@ -144,9 +170,13 @@ void setup()
 {
     Serial.begin(115200);
     pinMode(buzzer, OUTPUT);
-    pinMode(motionSensor, INPUT);
+    for (int i = 0; i < sizeof(motionSensors) / sizeof(motionSensors[0]); i++)
+    {
+        pinMode(motionSensors[i].pin, INPUT);
+    }
     tempSensor.begin();
 
+    // WiFi --------------------------------------------------------------------------------
     // Setting Static IP
     IPAddress local_IP(192, 168, 1, 191);
     IPAddress gateway(192, 168, 1, 1);
@@ -188,7 +218,7 @@ void setup()
         Serial.print(httpReturnCode);
         HTML_index_file = httpClient.getString();
         // Serial.println(HTML_index_file);
-    } while (!HTTP_CODE_OK);
+    } while (httpReturnCode != HTTP_CODE_OK);
     Serial.println(" = OK");
     httpClient.end(); // Frees the resources once it's done
 
@@ -241,14 +271,21 @@ void setup()
     server.begin();
 
     // Gets temperature a first time, then every so often
-    getTempC(-1);
+    float tempC = getTempC(-1);
+    tempC == DEVICE_DISCONNECTED_C ? Serial.printf("Couldn't reach sensor\n") : Serial.printf("Temp: %.3f°C\n", tempC);
+    if (mqttConnect())
+    {
+        bool sent = mqttClient.publish("home/esp32/temperature", String(tempC).c_str());
+        if (!sent)
+            Serial.println("Couldn't reach MQTT broker");
+    }
     prevTime = millis();
 
     Serial.println("ESP32 Alarm is ready to use!");
-    beep(3, SHORT_BEEP);
+    beep(1, SHORT_BEEP);
 }
 
-const unsigned long TEMP_READING_DELAY = 10; // in min
+const unsigned long TEMP_READING_DELAY = 20; // in min
 const int ALARM_TIME_DELAY = 3;              // in sec
 
 void loop()
@@ -284,26 +321,9 @@ void loop()
     if (alarmSet)
     {
         /********************** Readings testing with HC-SR501 ***************************/
-        int motionDetected = digitalRead(motionSensor);
-        if (motionDetected != lastValue)
+        for (int i = 0; i < sizeof(motionSensors) / sizeof(motionSensors[0]); i++)
         {
-            mqttConnect();
-            bool sent;
-            if (motionDetected == HIGH)
-            {
-                Serial.println("New motion detected!");
-                sent = mqttClient.publish("home/esp32/alarm/movement", "Movement");
-            }
-            else
-            {
-                Serial.println("Motion stopped");
-                // sent = mqttClient.publish("home/esp32/alarm/movement", "End of movement");
-            }
-            lastValue = motionDetected;
-            if (!sent)
-            {
-                Serial.println("Couldn't send to MQTT!");
-            }
+            motionSensors[i].checkForMovement();
         }
         /*********************************************************************************/
     }
