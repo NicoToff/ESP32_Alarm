@@ -128,7 +128,7 @@ void beep(int amount = 1, int LENGTH = SHORT_BEEP)
     {
         delay(25);
         digitalWrite(buzzer, HIGH);
-        delay(LENGTH == LONG_BEEP ? 200 : 50);
+        delay(LENGTH == LONG_BEEP ? 150 : 35);
         digitalWrite(buzzer, LOW);
         delay(25);
     }
@@ -249,7 +249,7 @@ void setup()
 }
 
 const unsigned long TEMP_READING_DELAY = 10; // in min
-const int ALARM_TIME_DELAY = 10;             // in sec
+const int ALARM_TIME_DELAY = 3;              // in sec
 
 void loop()
 {
@@ -275,7 +275,7 @@ void loop()
             Serial.println("Alarm set!");
             mqttConnect();
             mqttClient.publish("home/esp32/alarm/status", "ALARM ON");
-            beep(5, LONG_BEEP);
+            beep(1, LONG_BEEP);
             settingAlarm = false;
             alarmSet = true;
         }
@@ -283,7 +283,7 @@ void loop()
 
     if (alarmSet)
     {
-        /********************** Readings testing with HS-SR501 ***************************/
+        /********************** Readings testing with HC-SR501 ***************************/
         int motionDetected = digitalRead(motionSensor);
         if (motionDetected != lastValue)
         {
@@ -292,12 +292,12 @@ void loop()
             if (motionDetected == HIGH)
             {
                 Serial.println("New motion detected!");
-                sent = mqttClient.publish("home/esp32/alarm/movement", "New movement");
+                sent = mqttClient.publish("home/esp32/alarm/movement", "Movement");
             }
             else
             {
                 Serial.println("Motion stopped");
-                sent = mqttClient.publish("home/esp32/alarm/movement", "End of movement");
+                // sent = mqttClient.publish("home/esp32/alarm/movement", "End of movement");
             }
             lastValue = motionDetected;
             if (!sent)
