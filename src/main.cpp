@@ -191,8 +191,8 @@ float checkTempC(bool logToConsole = false, bool forwardToMqtt = false, int temp
 // Defines the length of beeps
 typedef enum
 {
-    SHORT_BEEP,
-    LONG_BEEP
+    SHORT_BEEP = 35,
+    LONG_BEEP = 150
 } beep_length_t;
 
 /**
@@ -202,7 +202,7 @@ typedef enum
  * @param amount number of beeps (default = 1)
  * @param LENGTH length of the beep(s) (default = SHORT_BEEP)
  */
-void beep(int amount = 1, beep_length_t LENGTH = SHORT_BEEP)
+void beep(int amount = 1, beep_length_t length = SHORT_BEEP)
 {
     if (amount < 1)
         amount = 1;
@@ -213,7 +213,7 @@ void beep(int amount = 1, beep_length_t LENGTH = SHORT_BEEP)
     {
         delay(25);
         digitalWrite(buzzer, HIGH);
-        delay(LENGTH == LONG_BEEP ? 150 : 35);
+        delay(length);
         digitalWrite(buzzer, LOW);
         delay(25);
     }
@@ -357,8 +357,8 @@ void loop()
             if (!settingAlarm)
                 break; // Exiting the loop if STOP is pressed
             Serial.printf("Alarm on in %d...\n", ALARM_TIME_DELAY - i);
-            beep(); // One short beep, this takes 100 ms
-            delay(900);
+            beep(); // One short beep, this takes 85 ms
+            delay(915);
         }
         if (settingAlarm)
         {
