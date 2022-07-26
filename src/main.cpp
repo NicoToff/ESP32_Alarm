@@ -44,6 +44,10 @@ OneWire oneWire(ONE_WIRE_BUS);
 // Usable object to get temperatures
 DallasTemperature tempSensor(&oneWire);
 
+/* Helper constants -------------------------------- */
+const bool SEND_TO_MQTT = true;
+const bool LOG_TO_CONSOLE = true;
+
 /* Other values ------------------------------------ */
 bool settingAlarm = false;
 bool alarmSet = false;
@@ -56,13 +60,13 @@ unsigned long prevTime;
 // MQTT Connection -----------------------------------------------------------------
 // Tries to connect for 5 seconds, and then stops attempting if it keeps failing.
 // Does nothing is already connected to MQTT.
+// Returns true if connected to MQTT
 bool mqttConnect()
 {
     bool connected = mqttClient.connected();
     if (!connected)
     {
         unsigned long startTime = millis();
-        bool connected = false;
         Serial.print("Connecting to MQTT...");
         while (!mqttClient.connect("esp32", mqttUser, mqttPassword) && millis() - startTime < 5000)
         {
@@ -75,57 +79,111 @@ bool mqttConnect()
     return connected;
 }
 
+bool sendToMqtt(String topic, String message)
+{
+    bool sent = false;
+    if (mqttConnect())
+    {
+        sent = mqttClient.publish(topic.c_str(), message.c_str());
+    }
+    if (!sent)
+    {
+        Serial.println("Couldn't send to MQTT!");
+    }
+    return sent;
+}
+// A class to deal easily with binary motion sensors, like the HC-SR501.
 class MotionSensor
 {
-public:
-    int pin = -1;
-    String name;
+private:
     bool movementDetected = false;
     bool lastValue = false;
+    int pin = -1;
+    String name;
+
+public:
     MotionSensor(int pin, String name = "motionSensor")
     {
         this->pin = pin;
         this->name = name;
     }
-    void checkForMovement()
+    /**
+     * @brief Sets the sensor's pin as INPUT
+     * @return int The sensor's pin
+     */
+    int setup()
+    {
+        pinMode(this->pin, INPUT);
+        return this->pin;
+    }
+    /**
+     * @brief Reads the state of the sensor's pin. If it's HIGH, the sensor detected movement.
+     *
+     * @param logToConsole Set to true if you want a message to be logged with the Serial object (default is false)
+     * @param forwardToMqtt Set to true if you want a message to be sent to an MQTT broker (default is false)
+     * @param topic The topic for MQTT; it's appended with the name of the sensor (default is "/motionsensor/")
+     * @param message The message to be sent to MQTT (default is "Movement")
+     * @return true if movement was detected
+     */
+    bool checkForMovement(bool logToConsole = false, bool forwardToMqtt = false, String topic = "/motionsensor/", String message = "Movement")
     {
         this->movementDetected = digitalRead(this->pin);
         if (this->movementDetected != this->lastValue)
         {
-            mqttConnect();
-            bool sent;
-            if (this->movementDetected == HIGH)
+            this->lastValue = this->movementDetected;
+            if (this->movementDetected == true)
             {
-                Serial.println(this->name + " detected movement");
-                sent = mqttClient.publish(("home/esp32/alarm/movement/" + this->name).c_str(), "Movement");
-                if (!sent)
+                if (forwardToMqtt)
                 {
-                    Serial.println("Couldn't send to MQTT!");
+                    sendToMqtt(topic + this->name, message);
+                }
+                if (logToConsole)
+                {
+                    Serial.println(this->name + " detected movement");
                 }
             }
-            // else
-            // {
-            //     Serial.println("Motion stopped");
-            //     // sent = mqttClient.publish("home/esp32/alarm/movement", "End of movement");
-            // }
-            this->lastValue = this->movementDetected;
         }
+        return this->movementDetected;
+    }
+    void setName(String name)
+    {
+        this->name = name;
+    }
+    String getName()
+    {
+        return this->name;
     }
 };
 
-// HC-SR501 ----------------------------------------
+// HC-SR501 ----------------------------------------------------
 MotionSensor motionSensors[] = {
-    MotionSensor(27, "PIRsensor1"),
-    MotionSensor(26, "PIRsensor2"),
-    MotionSensor(14, "PIRsensor3")};
+    MotionSensor(27, "HC-SR501_sensor1"),
+    MotionSensor(26, "HC-SR501_sensor2"),
+    MotionSensor(14, "HC-SR501_sensor3")};
 
-// TODO refactor this function and create an MQTT publish one
-float getTempC(int tempCOffset = 0)
+/**
+ * @brief Gets temperature given by the sole OneWire temp sensor available.
+ *
+ * @param logToConsole Set to true if you want a message to be logged with the Serial object (default is false)
+ * @param forwardToMqtt Set to true if you want a message to be sent to an MQTT broker (default is false)
+ * @param tempCOffset If sensor is inaccurate, you can give an offset value here
+ * @return The temperature from the sensor, as a float. Will return (-127 + tempCOffset) if sensor can't be reached
+ */
+float checkTempC(bool logToConsole = false, bool forwardToMqtt = false, int tempCOffset = 0)
 {
-    tempSensor.requestTemperatures(); // Method to get temperatures
-    // Function xxxByIndex() to get the temperature from the first (and only) sensor.
+    tempSensor.requestTemperatures(); // Method to get temperatures.
+    // Function xxxByIndex() to get the temperature from the first (and sole) sensor.
     float tempC = tempSensor.getTempCByIndex(0);
     tempC += tempCOffset;
+    if (logToConsole)
+    {
+        tempC == DEVICE_DISCONNECTED_C + tempCOffset ? Serial.printf("Couldn't reach sensor\n")
+                                                     : Serial.printf("Temp: %.3f°C\n", tempC);
+    }
+    if (forwardToMqtt)
+    {
+        sendToMqtt("home/esp32/temperature", String(tempC));
+    }
     return tempC; // Will return -127 if DEVICE_DISCONNECTED_C
 }
 
@@ -138,12 +196,13 @@ typedef enum
 } beep_length_t;
 
 /**
- * @brief Makes the piezo buzzer beep for a given number of times. Beeps can be SHORT_BEEP or LONG_BEEP and can go from 1 to 10.
+ * @brief Makes the piezo buzzer beep a given number of times.
+ * Beeps can be SHORT_BEEP (35 ms) or LONG_BEEP (150 ms) and can go from 1 to 10.
  *
  * @param amount number of beeps (default = 1)
  * @param LENGTH length of the beep(s) (default = SHORT_BEEP)
  */
-void beep(int amount = 1, int LENGTH = SHORT_BEEP)
+void beep(int amount = 1, beep_length_t LENGTH = SHORT_BEEP)
 {
     if (amount < 1)
         amount = 1;
@@ -172,7 +231,7 @@ void setup()
     pinMode(buzzer, OUTPUT);
     for (int i = 0; i < sizeof(motionSensors) / sizeof(motionSensors[0]); i++)
     {
-        pinMode(motionSensors[i].pin, INPUT);
+        motionSensors[i].setup();
     }
     tempSensor.begin();
 
@@ -271,14 +330,8 @@ void setup()
     server.begin();
 
     // Gets temperature a first time, then every so often
-    float tempC = getTempC(-1);
-    tempC == DEVICE_DISCONNECTED_C ? Serial.printf("Couldn't reach sensor\n") : Serial.printf("Temp: %.3f°C\n", tempC);
-    if (mqttConnect())
-    {
-        bool sent = mqttClient.publish("home/esp32/temperature", String(tempC).c_str());
-        if (!sent)
-            Serial.println("Couldn't reach MQTT broker");
-    }
+    checkTempC(LOG_TO_CONSOLE, SEND_TO_MQTT, -1);
+
     prevTime = millis();
 
     Serial.println("ESP32 Alarm is ready to use!");
@@ -294,7 +347,7 @@ void loop()
     if (millis() - prevTime >= TEMP_READING_DELAY * 60000)
     {
         prevTime = millis();
-        getTempC(-1);
+        checkTempC(LOG_TO_CONSOLE, SEND_TO_MQTT, -1);
     }
 
     if (settingAlarm && !alarmSet)
@@ -303,9 +356,9 @@ void loop()
         {
             if (!settingAlarm)
                 break; // Exiting the loop if STOP is pressed
-            delay(900);
             Serial.printf("Alarm on in %d...\n", ALARM_TIME_DELAY - i);
             beep(); // One short beep, this takes 100 ms
+            delay(900);
         }
         if (settingAlarm)
         {
@@ -320,11 +373,9 @@ void loop()
 
     if (alarmSet)
     {
-        /********************** Readings testing with HC-SR501 ***************************/
         for (int i = 0; i < sizeof(motionSensors) / sizeof(motionSensors[0]); i++)
         {
-            motionSensors[i].checkForMovement();
+            motionSensors[i].checkForMovement(LOG_TO_CONSOLE, SEND_TO_MQTT, "home/esp32/alarm/movement/");
         }
-        /*********************************************************************************/
     }
 }
